@@ -1,16 +1,31 @@
-# This is a sample Python script.
+from fastapi import FastAPI, Form
+from pydantic import BaseModel
+from app.services.content_moderation import is_text_toxic, check_image_url, check_video_url
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+8 to toggle the breakpoint.
+app = FastAPI(title="SmartQuitIoT AI Service")
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+class TextCheckRequest(BaseModel):
+    text: str
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+@app.get("/")
+def health_check():
+    return {"status": "AI Service is running"}
+
+# API Check Text
+@app.post("/check-content")
+def api_check_text(req: TextCheckRequest):
+    toxic = is_text_toxic(req.text)
+    return {"isToxic": toxic, "type": "text"}
+
+# API Check Image (URL)
+@app.post("/check-image-url")
+def api_check_image(image_url: str = Form(...)):
+    nsfw = check_image_url(image_url)
+    return {"isToxic": nsfw, "type": "image"}
+
+# API Check Video (URL)
+@app.post("/check-video-url")
+def api_check_video(video_url: str = Form(...)):
+    nsfw = check_video_url(video_url)
+    return {"isToxic": nsfw, "type": "video"}
