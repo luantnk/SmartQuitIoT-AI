@@ -18,3 +18,4 @@ onnxmltools
 onnxconverter-common
 python-dotenv
 pandas-stubs
+onnxruntime

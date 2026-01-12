@@ -10,137 +10,153 @@ import onnxmltools
 from onnxmltools.convert.common.data_types import FloatTensorType
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
-
+# --- CẤU HÌNH DB ---
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
+DB_PORT = os.getenv('DB_PORT', '3306')
 DB_NAME = os.getenv('DB_NAME')
 
 if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
+    print("Error: Missing database environment variables.")
     sys.exit(1)
 
 db_connection_str = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
-
 try:
     db_connection = create_engine(db_connection_str)
 except Exception as e:
-
+    print(f"Connection Error: {e}")
     sys.exit(1)
 
 
 def load_rich_data():
-    print("🔄 Loading rich data (Joining Member + Metric + Plan)...")
-
+    print("Loading FULL rich data...")
     sql_query = """
-                SELECT m.id         as member_id,
-                       m.dob,
-                       m.gender,
-                       p.start_date as plan_start_date,
-                       p.cigarettes_per_package,
-                       met.avg_anxiety,
-                       met.avg_craving_level,
-                       met.avg_mood,
-                       met.current_craving_level,
-                       met.streaks,
-                       met.money_saved,
-                       met.heart_rate,
-                       met.smoke_free_day_percentage,
-                       met.relapse_count_in_phase
-                FROM member m
-                         JOIN metric met ON m.id = met.member_id
-                         LEFT JOIN plan p ON m.id = p.member_id
-                WHERE p.status = 'IN_PROGRESS'
-                   OR p.status = 'CANCELED' \
+                SELECT qp.ftnd_score, \
+                       fm.smoke_avg_per_day, \
+                       fm.minutes_after_waking_to_smoke, \
+                       fm.number_of_years_of_smoking, \
+                       m.gender, \
+                       m.dob, \
+                       dr.anxiety_level, \
+                       dr.craving_level, \
+                       dr.mood_level, \
+                       dr.heart_rate, \
+                       dr.sleep_duration, \
+                       dr.have_smoked, \
+                       p.progress, \
+                       p.status as phase_status
+                FROM quit_plan qp
+                         JOIN member m ON qp.member_id = m.id
+                         JOIN form_metric fm ON qp.form_metric_id = fm.id
+                         LEFT JOIN phase p ON qp.id = p.quit_plan_id
+                         LEFT JOIN diary_record dr ON m.id = dr.member_id
+                WHERE qp.is_active = 1 \
                 """
-
     try:
         df = pd.read_sql(sql_query, db_connection)
-        print(f"✅ Data loaded. Rows: {len(df)}")
+        if df.empty:
+            print("⚠️ Database is empty.")
+            return None
+        print(f"✅ Data loaded successfully. Rows: {len(df)}")
         return df
     except Exception as e:
-        print(f"❌ DB Error during query: {e}")
+        print(f"❌ DB Query Error: {e}")
         return None
 
 
 def preprocess_features(df):
     print("🛠 Feature Engineering...")
 
-    current_year = datetime.now().year
-    df['dob'] = pd.to_datetime(df['dob'])
-    df['age'] = current_year - df['dob'].dt.year
 
-    df['plan_start_date'] = pd.to_datetime(df['plan_start_date'])
-    df['days_on_plan'] = (datetime.now() - df['plan_start_date']).dt.days
+    def parse_binary_col(val):
+        if isinstance(val, bytes):
+            return int.from_bytes(val, "big")
+        return val
+
+
+    if 'have_smoked' in df.columns:
+        df['have_smoked'] = df['have_smoked'].apply(parse_binary_col).fillna(0).astype(int)
+
+    current_year = datetime.now().year
+    df['dob'] = pd.to_datetime(df['dob'], errors='coerce')
+    df['age'] = current_year - df['dob'].dt.year
+    df['age'] = df['age'].fillna(25)
 
     df['gender_code'] = df['gender'].apply(lambda x: 1 if str(x).upper() == 'MALE' else 0)
 
+
+    df['anxiety_level'] = df['anxiety_level'].fillna(0)
+    df['craving_level'] = df['craving_level'].fillna(0)
+    df['mood_level'] = df['mood_level'].fillna(5)
+    df['heart_rate'] = df['heart_rate'].fillna(0)
+    df['sleep_duration'] = df['sleep_duration'].fillna(0)
+    df['progress'] = df['progress'].fillna(0)
+
+    def define_success(row):
+        if row['have_smoked'] > 0:
+            return 0
+        if str(row['phase_status']) == 'COMPLETED':
+            return 1
+        return 1
+
+    df['target_label'] = df.apply(define_success, axis=1)
+
     feature_columns = [
-        'age',
-        'gender_code',
-        'days_on_plan',
-        'cigarettes_per_package',
-        'avg_anxiety',
-        'avg_craving_level',
-        'current_craving_level',
-        'streaks',
-        'heart_rate',
-        'smoke_free_day_percentage'
+        'ftnd_score', 'smoke_avg_per_day', 'minutes_after_waking_to_smoke',
+        'age', 'gender_code', 'anxiety_level', 'craving_level',
+        'mood_level', 'heart_rate', 'sleep_duration', 'progress'
     ]
 
-
-    df[feature_columns] = df[feature_columns].fillna(0)
-
-
-    df['is_high_risk'] = df.apply(
-        lambda row: 1 if (row['relapse_count_in_phase'] > 0 or row['current_craving_level'] > 7) else 0,
-        axis=1
-    )
-
+    df[feature_columns] = df[feature_columns].astype(float)
     return df, feature_columns
 
 
 def train_and_export_onnx(df, features):
-    print("🚀 Training Model...")
-
+    print("Training SmartQuit Predictive Model...")
     X = df[features]
-    y = df['is_high_risk']
+    y = df['target_label']
 
-    if len(y.unique()) < 2:
-        print("⚠️ CẢNH BÁO: Dữ liệu chỉ có 1 nhãn (toàn bộ High Risk hoặc toàn bộ Low Risk).")
-        print("   Mô hình có thể không học được gì hữu ích.")
+    unique_classes = np.unique(y)
+    print(f"Phân phối nhãn dữ liệu: {np.unique(y, return_counts=True)}")
+
+    if len(unique_classes) < 2:
+        print("LỖI CRITICAL: Dữ liệu thực tế chỉ có 1 loại nhãn.")
+        print("Hãy vào DB sửa tay 1 dòng have_smoked = 1 hoặc status = 'FAILED' để test.")
+        return None
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
     model = xgb.XGBClassifier(
         n_estimators=100,
         max_depth=4,
         learning_rate=0.05,
-        use_label_encoder=False,
-        eval_metric='logloss'
+        eval_metric='logloss',
+        use_label_encoder=False
     )
-    model.fit(X_train, y_train)
-    accuracy = model.score(X_test, y_test) if len(X_test) > 0 else 0
-    print(f"✅ Training Done. Accuracy: {accuracy:.2f}")
-    print("💾 Converting to ONNX format...")
-    initial_type = [('float_input', FloatTensorType([None, len(features)]))]
-    onnx_model = onnxmltools.convert_xgboost(model, initial_types=initial_type)
-    onnx_filename = "smartquit_risk_model.onnx"
-    onnxmltools.utils.save_model(onnx_model, onnx_filename)
-    print(f"🎉 Model saved as '{onnx_filename}'")
-    print(f"📝 Feature Order for Java: {features}")
-    return onnx_filename
+
+    try:
+        model.fit(X_train, y_train)
+        accuracy = model.score(X_test, y_test) if not X_test.empty else 0
+        print(f"Training Done. Accuracy: {accuracy:.4f}")
+
+        print("Converting to ONNX...")
+        initial_type = [('float_input', FloatTensorType([None, len(features)]))]
+        onnx_model = onnxmltools.convert_xgboost(model, initial_types=initial_type)
+
+        onnx_filename = "../models/smartquit_model.onnx"
+        onnxmltools.utils.save_model(onnx_model, onnx_filename)
+        print(f"Model exported: {onnx_filename}")
+
+    except Exception as e:
+        print(f"Training Failed: {e}")
 
 
 if __name__ == "__main__":
     raw_df = load_rich_data()
     if raw_df is not None and not raw_df.empty:
         processed_df, feats = preprocess_features(raw_df)
-
-        if len(processed_df) > 5:
+        if processed_df is not None:
             train_and_export_onnx(processed_df, feats)
-        else:
-            print("⚠️ Not enough data to train (Need > 5 rows).")
-    else:
-        print("⚠️ No data found in database.")
