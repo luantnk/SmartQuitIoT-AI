@@ -13,7 +13,6 @@ httpx
 xgboost
 sqlalchemy
 pymysql
-mariadb
 onnxmltools
 onnxconverter-common
 python-dotenv

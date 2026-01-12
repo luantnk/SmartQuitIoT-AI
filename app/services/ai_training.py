@@ -10,9 +10,15 @@ import onnxmltools
 from onnxmltools.convert.common.data_types import FloatTensorType
 from dotenv import load_dotenv
 
-load_dotenv()
 
-# --- CẤU HÌNH DB ---
+CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_FILE_DIR))
+
+load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
+
+MODEL_DIR = os.path.join(PROJECT_ROOT, "app", "models")
+MODEL_PATH = os.path.join(MODEL_DIR, "smartquit_model.onnx")
+
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_HOST = os.getenv('DB_HOST')
@@ -20,14 +26,14 @@ DB_PORT = os.getenv('DB_PORT', '3306')
 DB_NAME = os.getenv('DB_NAME')
 
 if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
-    print("Error: Missing database environment variables.")
+    print(f"[ERROR] Missing env vars. Checked .env at: {PROJECT_ROOT}")
     sys.exit(1)
 
 db_connection_str = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 try:
     db_connection = create_engine(db_connection_str)
 except Exception as e:
-    print(f"Connection Error: {e}")
+    print(f"[ERROR] Connection Error: {e}")
     sys.exit(1)
 
 
@@ -58,24 +64,22 @@ def load_rich_data():
     try:
         df = pd.read_sql(sql_query, db_connection)
         if df.empty:
-            print("⚠️ Database is empty.")
+            print("[WARN] Database is empty.")
             return None
-        print(f"✅ Data loaded successfully. Rows: {len(df)}")
+        print(f"Data loaded successfully. Rows: {len(df)}")
         return df
     except Exception as e:
-        print(f"❌ DB Query Error: {e}")
+        print(f"[ERROR] DB Query Error: {e}")
         return None
 
 
 def preprocess_features(df):
-    print("🛠 Feature Engineering...")
-
+    print("Feature Engineering...")
 
     def parse_binary_col(val):
         if isinstance(val, bytes):
             return int.from_bytes(val, "big")
         return val
-
 
     if 'have_smoked' in df.columns:
         df['have_smoked'] = df['have_smoked'].apply(parse_binary_col).fillna(0).astype(int)
@@ -87,7 +91,7 @@ def preprocess_features(df):
 
     df['gender_code'] = df['gender'].apply(lambda x: 1 if str(x).upper() == 'MALE' else 0)
 
-
+    # Fill NULL
     df['anxiety_level'] = df['anxiety_level'].fillna(0)
     df['craving_level'] = df['craving_level'].fillna(0)
     df['mood_level'] = df['mood_level'].fillna(5)
@@ -96,10 +100,8 @@ def preprocess_features(df):
     df['progress'] = df['progress'].fillna(0)
 
     def define_success(row):
-        if row['have_smoked'] > 0:
-            return 0
-        if str(row['phase_status']) == 'COMPLETED':
-            return 1
+        if row['have_smoked'] > 0: return 0
+        if str(row['phase_status']) == 'COMPLETED': return 1
         return 1
 
     df['target_label'] = df.apply(define_success, axis=1)
@@ -119,22 +121,16 @@ def train_and_export_onnx(df, features):
     X = df[features]
     y = df['target_label']
 
-    unique_classes = np.unique(y)
     print(f"Phân phối nhãn dữ liệu: {np.unique(y, return_counts=True)}")
-
-    if len(unique_classes) < 2:
-        print("LỖI CRITICAL: Dữ liệu thực tế chỉ có 1 loại nhãn.")
-        print("Hãy vào DB sửa tay 1 dòng have_smoked = 1 hoặc status = 'FAILED' để test.")
+    if len(np.unique(y)) < 2:
+        print("[ERROR] CRITICAL: Dữ liệu chỉ có 1 loại nhãn.")
         return None
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model = xgb.XGBClassifier(
-        n_estimators=100,
-        max_depth=4,
-        learning_rate=0.05,
-        eval_metric='logloss',
-        use_label_encoder=False
+        n_estimators=100, max_depth=4, learning_rate=0.05,
+        eval_metric='logloss', use_label_encoder=False
     )
 
     try:
@@ -146,12 +142,15 @@ def train_and_export_onnx(df, features):
         initial_type = [('float_input', FloatTensorType([None, len(features)]))]
         onnx_model = onnxmltools.convert_xgboost(model, initial_types=initial_type)
 
-        onnx_filename = "../models/smartquit_model.onnx"
-        onnxmltools.utils.save_model(onnx_model, onnx_filename)
-        print(f"Model exported: {onnx_filename}")
+        if not os.path.exists(MODEL_DIR):
+            os.makedirs(MODEL_DIR)
+            print(f"Created directory: {MODEL_DIR}")
+
+        onnxmltools.utils.save_model(onnx_model, MODEL_PATH)
+        print(f"SUCCESS: Model saved at {MODEL_PATH}")
 
     except Exception as e:
-        print(f"Training Failed: {e}")
+        print(f"[ERROR] Training Failed: {e}")
 
 
 if __name__ == "__main__":
