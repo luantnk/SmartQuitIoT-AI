@@ -10,3 +10,11 @@ scikit-learn
 pandas
 pytest
 httpx
+xgboost
+sqlalchemy
+pymysql
+mariadb
+onnxmltools
+onnxconverter-common
+python-dotenv
+pandas-stubs

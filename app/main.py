@@ -1,21 +1,15 @@
-from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
 from app.services.content_moderation import is_text_toxic, check_image_url, check_video_url
 
-app = FastAPI(
-    title="SmartQuitIoT AI Service",
-    description="Microservice for detecting toxic text and NSFW images/videos.",
-    version="1.0.0"
-)
+app = FastAPI(title="SmartQuitIoT AI Service")
+
 
 class TextCheckRequest(BaseModel):
     text: str
 
-@app.get("/", include_in_schema=False)
-def root():
-    return RedirectResponse(url="/docs")
+class MediaUrlRequest(BaseModel):
+    url: str
 
 @app.get("/health", tags=["System"])
 def health_check():
@@ -23,38 +17,30 @@ def health_check():
 
 @app.post("/check-content", tags=["Content Moderation"])
 def api_check_text(req: TextCheckRequest):
-    toxic = is_text_toxic(req.text)
-    return {
-        "isToxic": toxic,
-        "type": "text",
-        "message": "Content flagged" if toxic else "Content safe"
-    }
+    try:
+        toxic = is_text_toxic(req.text)
+        return {"isToxic": toxic, "type": "text"}
+    except Exception as e:
+        print(f"Error checking text: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/check-image-url", tags=["Content Moderation"])
-def api_check_image(image_url: str = Form(...)):
+def api_check_image(req: MediaUrlRequest):
     try:
-        nsfw = check_image_url(image_url)
+        nsfw = check_image_url(req.url)
         return {"isToxic": nsfw, "type": "image"}
-
-    except requests.exceptions.RequestException:
-        raise HTTPException(status_code=400, detail="Could not download image (404 or Network Error)")
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Invalid Image: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Processing Error: {str(e)}")
+        print(f"Error checking image: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/check-video-url", tags=["Content Moderation"])
-def api_check_video(video_url: str = Form(...)):
+def api_check_video(req: MediaUrlRequest):
     try:
-        nsfw = check_video_url(video_url)
+        nsfw = check_video_url(req.url)
         return {"isToxic": nsfw, "type": "video"}
-
-    except requests.exceptions.RequestException:
-        raise HTTPException(status_code=400, detail="Could not download video (404 or Network Error)")
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Invalid Video: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Processing Error: {str(e)}")
+        print(f"Error checking video: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
