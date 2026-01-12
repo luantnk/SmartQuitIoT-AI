@@ -1,0 +1,25 @@
+# Ignore python environments
+.venv/
+venv/
+env/
+
+# Ignore python cache
+**/__pycache__/
+*.pyc
+
+# Ignore IDE settings
+.idea/
+.vscode/
+
+# Ignore Git metadata (this saves a lot of space)
+.git/
+.github/
+
+# Ignore local test data
+tests/
+*.mp4
+*.webp
+*.jpg
+
+# Ignore build logs
+*.log

@@ -8,3 +8,5 @@ pillow
 opencv-python-headless
 scikit-learn
 pandas
+pytest
+httpx
