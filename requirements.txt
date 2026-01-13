@@ -18,3 +18,7 @@ onnxconverter-common
 python-dotenv
 pandas-stubs
 onnxruntime
+scipy
+sentencepiece
+soundfile
+datasets

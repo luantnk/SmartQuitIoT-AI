@@ -1,13 +1,16 @@
 import os
 import uvicorn
+import shutil
+import uuid
 import numpy as np
 import onnxruntime as rt
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from app.services.content_moderation import is_text_toxic, check_image_url, check_video_url
+from app.services.content_moderation_service import is_text_toxic, check_image_url, check_video_url
+from app.services.audio_service import transcribe_audio_file, text_to_speech_file
 
 app = FastAPI(title="SmartQuitIoT AI Service")
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CURRENT_WORKING_DIR = os.getcwd()
@@ -37,7 +40,6 @@ if sess is None:
     print(f"Searched in: {candidate_paths}")
 
 
-
 class TextCheckRequest(BaseModel):
     text: str
 
@@ -48,6 +50,14 @@ class MediaUrlRequest(BaseModel):
 
 class QuitPlanPredictRequest(BaseModel):
     features: list[float]
+
+class TextToSpeechRequest(BaseModel):
+    text: str
+
+
+def cleanup_file(path: str):
+    if os.path.exists(path):
+        os.remove(path)
 
 
 @app.get("/health", tags=["System"])
@@ -65,9 +75,7 @@ def predict_quit_status(req: QuitPlanPredictRequest):
         raise HTTPException(status_code=503, detail="Prediction model not found on server")
     try:
         input_data = np.array([req.features], dtype=np.float32)
-
         input_name = sess.get_inputs()[0].name
-
         result = sess.run(None, {input_name: input_data})
         success_prob = float(result[1][0][1])
         relapse_risk = 1.0 - success_prob
@@ -80,8 +88,6 @@ def predict_quit_status(req: QuitPlanPredictRequest):
     except Exception as e:
         print(f"Prediction Error: {e}")
         raise HTTPException(status_code=500, detail="Inference failed")
-
-
 
 
 @app.post("/check-content", tags=["Content Moderation"])
@@ -113,6 +119,48 @@ def api_check_video(req: MediaUrlRequest):
         print(f"Error checking video: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@app.post("/voice-to-text", tags=["Audio Processing"])
+def api_voice_to_text(file: UploadFile = File(...)):
+    filename = file.filename if file.filename else "audio.wav"
+    file_extension = filename.split(".")[-1]
+    temp_filename = f"temp_{uuid.uuid4()}.{file_extension}"
+    temp_file_path = os.path.join(CURRENT_WORKING_DIR, temp_filename)
+
+    try:
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        text_result = transcribe_audio_file(temp_file_path)
+
+        return {
+            "text": text_result,
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"Error processing audio: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+
+@app.post("/text-to-voice", tags=["Audio Processing"])
+def api_text_to_voice(req: TextToSpeechRequest, background_tasks: BackgroundTasks):
+    temp_filename = f"tts_output_{uuid.uuid4()}.wav"
+    output_path = os.path.join(CURRENT_WORKING_DIR, temp_filename)
+
+    try:
+        text_to_speech_file(req.text, output_path)
+
+        background_tasks.add_task(cleanup_file, output_path)
+
+        return FileResponse(output_path, media_type="audio/wav", filename="speech.wav")
+
+    except Exception as e:
+        print(f"Error generating speech: {e}")
+        cleanup_file(output_path)
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
