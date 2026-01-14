@@ -3,56 +3,27 @@ import uvicorn
 import shutil
 import uuid
 import numpy as np
-import onnxruntime as rt
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from app.services.summary_service import summary_service, generate_coach_summary
+from fastapi.concurrency import run_in_threadpool
+
+from app.requests.api_schemas import (
+    TextCheckRequest,
+    MediaUrlRequest,
+    QuitPlanPredictRequest,
+    TextToSpeechRequest,
+    SummaryRequest
+)
+
 from app.services.content_moderation_service import is_text_toxic, check_image_url, check_video_url
 from app.services.audio_service import transcribe_audio_file, text_to_speech_file
+from app.services.summary_service import summary_service
+
+from app.models import onnx_session, model_path
 
 app = FastAPI(title="SmartQuitIoT AI Service")
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CURRENT_WORKING_DIR = os.getcwd()
-
-candidate_paths = [
-    os.path.join(CURRENT_WORKING_DIR, "app", "models", "smartquit_model.onnx"),
-    os.path.join(BASE_DIR, "app", "models", "smartquit_model.onnx"),
-    os.path.join(BASE_DIR, "models", "smartquit_model.onnx"),
-    "smartquit_model.onnx"
-]
-
-sess = None
-MODEL_PATH = None
-
-for path in candidate_paths:
-    if os.path.exists(path):
-        try:
-            sess = rt.InferenceSession(path)
-            MODEL_PATH = path
-            print(f"AI Model loaded successfully from: {path}")
-            break
-        except Exception as e:
-            print(f"Found file but failed to load at {path}: {e}")
-
-if sess is None:
-    print("CRITICAL: Could not find smartquit_model.onnx in any expected location.")
-    print(f"Searched in: {candidate_paths}")
-
-
-class TextCheckRequest(BaseModel):
-    text: str
-
-
-class MediaUrlRequest(BaseModel):
-    url: str
-
-
-class QuitPlanPredictRequest(BaseModel):
-    features: list[float]
-
-class TextToSpeechRequest(BaseModel):
-    text: str
 
 
 def cleanup_file(path: str):
@@ -61,22 +32,24 @@ def cleanup_file(path: str):
 
 
 @app.get("/health", tags=["System"])
-def health_check():
+async def health_check():
     return {
         "status": "AI Service is ready",
-        "model_loaded": sess is not None,
-        "model_path": MODEL_PATH if MODEL_PATH else "Not Found"
+        "onnx_model_loaded": onnx_session is not None,
+        "onnx_path": model_path if model_path else "Not Found"
     }
 
 
 @app.post("/predict-quit-status", tags=["Plan Prediction"])
-def predict_quit_status(req: QuitPlanPredictRequest):
-    if sess is None:
+async def predict_quit_status(req: QuitPlanPredictRequest):
+    if onnx_session is None:
         raise HTTPException(status_code=503, detail="Prediction model not found on server")
     try:
+        # Logic chạy ONNX
         input_data = np.array([req.features], dtype=np.float32)
-        input_name = sess.get_inputs()[0].name
-        result = sess.run(None, {input_name: input_data})
+        input_name = onnx_session.get_inputs()[0].name
+        result = onnx_session.run(None, {input_name: input_data})
+
         success_prob = float(result[1][0][1])
         relapse_risk = 1.0 - success_prob
 
@@ -91,54 +64,44 @@ def predict_quit_status(req: QuitPlanPredictRequest):
 
 
 @app.post("/check-content", tags=["Content Moderation"])
-def api_check_text(req: TextCheckRequest):
+async def api_check_text(req: TextCheckRequest):
     try:
         toxic = is_text_toxic(req.text)
         return {"isToxic": toxic, "type": "text"}
     except Exception as e:
-        print(f"Error checking text: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/check-image-url", tags=["Content Moderation"])
-def api_check_image(req: MediaUrlRequest):
+async def api_check_image(req: MediaUrlRequest):
     try:
         nsfw = check_image_url(req.url)
         return {"isToxic": nsfw, "type": "image"}
     except Exception as e:
-        print(f"Error checking image: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/check-video-url", tags=["Content Moderation"])
-def api_check_video(req: MediaUrlRequest):
+async def api_check_video(req: MediaUrlRequest):
     try:
         nsfw = check_video_url(req.url)
         return {"isToxic": nsfw, "type": "video"}
     except Exception as e:
-        print(f"Error checking video: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/voice-to-text", tags=["Audio Processing"])
-def api_voice_to_text(file: UploadFile = File(...)):
+async def api_voice_to_text(file: UploadFile = File(...)):
     filename = file.filename if file.filename else "audio.wav"
     file_extension = filename.split(".")[-1]
     temp_filename = f"temp_{uuid.uuid4()}.{file_extension}"
     temp_file_path = os.path.join(CURRENT_WORKING_DIR, temp_filename)
-
     try:
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-
         text_result = transcribe_audio_file(temp_file_path)
-
-        return {
-            "text": text_result,
-            "status": "success"
-        }
+        return {"text": text_result, "status": "success"}
     except Exception as e:
-        print(f"Error processing audio: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(temp_file_path):
@@ -146,21 +109,27 @@ def api_voice_to_text(file: UploadFile = File(...)):
 
 
 @app.post("/text-to-voice", tags=["Audio Processing"])
-def api_text_to_voice(req: TextToSpeechRequest, background_tasks: BackgroundTasks):
+async def api_text_to_voice(req: TextToSpeechRequest, background_tasks: BackgroundTasks):
     temp_filename = f"tts_output_{uuid.uuid4()}.wav"
     output_path = os.path.join(CURRENT_WORKING_DIR, temp_filename)
-
     try:
         text_to_speech_file(req.text, output_path)
-
         background_tasks.add_task(cleanup_file, output_path)
-
         return FileResponse(output_path, media_type="audio/wav", filename="speech.wav")
-
     except Exception as e:
-        print(f"Error generating speech: {e}")
         cleanup_file(output_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/summarize-week", tags=["Coach Assistance"])
+async def summarize_week(request: SummaryRequest):
+    try:
+        logs_dict = [log.dict() for log in request.logs]
+        summary_text = await run_in_threadpool(generate_coach_summary, request.member_name, logs_dict)
+        return {"status": "success", "summary": summary_text}
+    except Exception as e:
+        print(f"API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

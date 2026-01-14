@@ -1,48 +1,78 @@
+# app/models.py
 import os
 import torch
+import onnxruntime as rt
 from transformers import (
     pipeline,
     AutoImageProcessor,
     AutoModelForImageClassification,
     SpeechT5Processor,
     SpeechT5ForTextToSpeech,
-    SpeechT5HifiGan
+    SpeechT5HifiGan,
+    AutoModelForCausalLM,
+    AutoTokenizer
 )
 
 print("Loading AI Models... This may take a while...")
 
-
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-text_classifier = pipeline("text-classification", model="unitary/toxic-bert", top_k=None)
+text_classifier = pipeline("text-classification", model="unitary/toxic-bert", top_k=None,
+                           device=0 if torch.cuda.is_available() else -1)
 image_processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
 image_model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
-
-
-stt_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small")
-
+stt_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small",
+                        device=0 if torch.cuda.is_available() else -1)
 tts_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
 tts_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
 tts_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
 
+print("Loading GenAI Summary Model (Qwen)...")
+model_id = "Qwen/Qwen2.5-1.5B-Instruct"
 
-print("Loading Speaker Embeddings from file...")
+try:
+    summary_tokenizer = AutoTokenizer.from_pretrained(model_id)
+    summary_model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype="auto",
+        device_map="auto"
+    )
+    print("SUCCESS: Qwen Summary Model Loaded!")
+except Exception as e:
+    print(f"FAILED to load Qwen: {e}")
+    summary_tokenizer = None
+    summary_model = None
 
 
-embedding_path = os.path.join(CURRENT_DIR, "models", "speaker_speecht5.pt")
+print("Loading ONNX Prediction Model...")
+candidate_paths = [
+    os.path.join(CURRENT_DIR, "smartquit_model.onnx"),
+    os.path.join(BASE_DIR, "models", "smartquit_model.onnx"),
+    "smartquit_model.onnx"
+]
 
+onnx_session = None
+model_path = None
+
+for path in candidate_paths:
+    if os.path.exists(path):
+        try:
+            onnx_session = rt.InferenceSession(path)
+            model_path = path
+            print(f"SUCCESS: ONNX Model loaded from: {path}")
+            break
+        except Exception as e:
+            print(f"Found file but failed to load at {path}: {e}")
+
+if onnx_session is None:
+    print("WARNING: Could not find smartquit_model.onnx")
+
+embedding_path = os.path.join(CURRENT_DIR, "speaker_speecht5.pt")
 speaker_embeddings = None
-
 if os.path.exists(embedding_path):
-    try:
-
-        speaker_embeddings = torch.load(embedding_path)
-        print(f"SUCCESS: Speaker Embeddings Loaded from: {embedding_path}")
-    except Exception as e:
-        print(f"ERROR: Failed to load .pt file: {e}")
-else:
-    print(f"WARNING: File not found at: {embedding_path}")
-    print("ACTION REQUIRED: Please run 'python app/create_embedding.py' to generate it.")
+    speaker_embeddings = torch.load(embedding_path)
 
 print("All AI Models Ready!")
