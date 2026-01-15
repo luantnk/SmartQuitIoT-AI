@@ -5,7 +5,6 @@ import uuid
 import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
-from app.services.summary_service import summary_service, generate_coach_summary
 from fastapi.concurrency import run_in_threadpool
 
 from app.requests.api_schemas import (
@@ -13,12 +12,16 @@ from app.requests.api_schemas import (
     MediaUrlRequest,
     QuitPlanPredictRequest,
     TextToSpeechRequest,
-    SummaryRequest, DiaryAnalysisRequest
+    SummaryRequest,
+    DiaryAnalysisRequest,
+    ReportChartRequest
 )
 
 from app.services.content_moderation_service import is_text_toxic, check_image_url, check_video_url
 from app.services.audio_service import transcribe_audio_file, text_to_speech_file
-from app.services.summary_service import summary_service
+
+from app.services.summary_service import summary_service, generate_coach_summary
+from app.services.report_service import report_service
 
 from app.models import onnx_session, model_path
 
@@ -133,12 +136,9 @@ async def summarize_week(request: SummaryRequest):
 
 @app.post("/analyze-diary", tags=["Coach Assistance"])
 async def analyze_diary(request: DiaryAnalysisRequest):
-
     try:
         data = request.dict()
-
         result = await run_in_threadpool(summary_service.analyze_diary_sentiment, data)
-
         return result
     except Exception as e:
         print(f"Daily Analysis Error: {e}")
@@ -147,6 +147,24 @@ async def analyze_diary(request: DiaryAnalysisRequest):
             "is_high_risk": False,
             "status_color": "gray"
         }
+
+@app.post("/generate-report-image", tags=["Visualization"])
+async def generate_report_image(req: ReportChartRequest):
+    try:
+        image_base64 = await run_in_threadpool(
+            report_service.generate_weekly_report_image,
+            req.logs,
+            req.member_name
+        )
+
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="Could not generate image from provided data")
+
+        return {"status": "success", "image_base64": image_base64}
+
+    except Exception as e:
+        print(f"Report Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

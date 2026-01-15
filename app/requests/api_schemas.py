@@ -56,3 +56,14 @@ class DiaryAnalysisRequest(BaseModel):
     have_smoked: bool = False
     note: Optional[str] = ""
     triggers: Optional[List[str]] = []
+
+class ReportChartRequest(BaseModel):
+    member_name: str
+    logs: List[dict]
+
+class CoachDataRequest(BaseModel):
+    coach_name: str
+    total_active_members: int
+    appointments_completed: int
+    member_highlights: List[str]
+    top_triggers: List[str]
