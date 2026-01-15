@@ -60,6 +60,8 @@ class DiaryAnalysisRequest(BaseModel):
 class ReportChartRequest(BaseModel):
     member_name: str
     logs: List[dict]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 class CoachDataRequest(BaseModel):
     coach_name: str

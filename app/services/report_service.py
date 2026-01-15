@@ -7,13 +7,15 @@ import pandas as pd
 import numpy as np
 import io
 import base64
+from typing import Optional
 
 
 class ReportService:
     def __init__(self):
         pass
 
-    def generate_weekly_report_image(self, logs: list, member_name: str) -> str:
+    def generate_report_image(self, logs: list, member_name: str, start_date: Optional[str] = None,
+                              end_date: Optional[str] = None) -> str:
         if not logs:
             return None
 
@@ -21,7 +23,26 @@ class ReportService:
             df = pd.DataFrame(logs)
 
             if 'date' not in df.columns: return None
+
+
             df['date'] = pd.to_datetime(df['date'])
+
+
+
+
+            if start_date:
+                df = df[df['date'] >= pd.to_datetime(start_date)]
+
+            if end_date:
+
+                df = df[df['date'] <= pd.to_datetime(end_date)]
+
+
+            if df.empty:
+                return None
+
+
+
             df = df.sort_values('date')
             df['date_str'] = df['date'].dt.strftime('%d/%m')
 
@@ -29,9 +50,7 @@ class ReportService:
 
             fig_width = max(10, num_records * 0.6)
 
-
             if fig_width > 25: fig_width = 25
-
 
             cols_to_ensure = [
                 'cigarettes_smoked', 'craving_level', 'mood_level',

@@ -152,9 +152,11 @@ async def analyze_diary(request: DiaryAnalysisRequest):
 async def generate_report_image(req: ReportChartRequest):
     try:
         image_base64 = await run_in_threadpool(
-            report_service.generate_weekly_report_image,
+            report_service.generate_report_image,
             req.logs,
-            req.member_name
+            req.member_name,
+            req.start_date,
+            req.end_date
         )
 
         if not image_base64:
@@ -165,6 +167,5 @@ async def generate_report_image(req: ReportChartRequest):
     except Exception as e:
         print(f"Report Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
