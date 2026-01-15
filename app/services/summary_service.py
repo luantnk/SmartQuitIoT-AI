@@ -26,8 +26,11 @@ def clean_java_triggers(raw_trigger):
 
 
 def generate_coach_summary(member_name: str, logs: list) -> dict:
+    """
+    Hàm này dùng để tạo báo cáo tuần (Weekly Report).
+    Giữ nguyên logic cũ của bạn.
+    """
     if not logs:
-
         return {
             "summary": "No data available.",
             "risk_level": "UNKNOWN",
@@ -80,8 +83,6 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             f"{health_info}. "
             f"Note: {log.get('note', '').strip()}\n"
         )
-
-
 
     system_prompt = (
         "You are an expert smoking cessation clinical coach (SmartQuitIoT). "
@@ -146,6 +147,85 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
 class SummaryService:
     def __init__(self):
         pass
+
+    def analyze_diary_sentiment(self, data: dict) -> dict:
+
+        if hf_client is None:
+            return {
+                "message": "Keep pushing forward! You are doing great.",
+                "is_high_risk": False,
+                "status_color": "green"
+            }
+
+        anxiety = data.get('anxiety_level', 0) or 0
+        craving = data.get('craving_level', 0) or 0
+        mood = data.get('mood_level', 5) or 5
+        smoked = data.get('have_smoked', False)
+        note = data.get('note', "") or ""
+
+        is_high_risk = False
+        status_color = "green"
+        risk_context = "User is stable."
+
+        if smoked:
+            is_high_risk = True
+            status_color = "red"
+            risk_context = "User just RELAPSED (smoked). They might feel guilty. Be kind but firm."
+        elif anxiety >= 7 or craving >= 7:
+            is_high_risk = True
+            status_color = "yellow"
+            risk_context = f"High Alert: Anxiety {anxiety}/10, Craving {craving}/10. User is stressed/struggling."
+        elif mood <= 3:
+            is_high_risk = True
+            status_color = "yellow"
+            risk_context = f"User is feeling down (Mood {mood}/10). Needs encouragement."
+        else:
+            risk_context = "User stayed smoke-free and feels okay. Celebrate this win."
+
+        system_prompt = (
+            "You are SmartQuit, a friendly and empathetic smoking cessation coach. "
+            "Your task is to generate a **Single Short Notification Message** (max 50 words) based on the user's diary entry.\n"
+            "Rules:\n"
+            "- If Relapse/High Risk: Be supportive, forgiving, suggest breathing or drinking water.\n"
+            "- If Good Progress: Celebrate small wins, be cheerful.\n"
+            "- Output ONLY the message text. No quotes, no JSON."
+        )
+
+        user_message = (
+            f"Context: {risk_context}\n"
+            f"User Note: {note}\n"
+            f"Generate the notification message:"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        try:
+            response = hf_client.chat.completions.create(
+                model=HF_MODEL_ID,
+                messages=messages,
+                max_tokens=150,
+                temperature=0.7
+            )
+
+            ai_message = response.choices[0].message.content.strip()
+            ai_message = ai_message.replace('"', '').replace("JSON", "")
+
+            return {
+                "message": ai_message,
+                "is_high_risk": is_high_risk,
+                "status_color": status_color
+            }
+
+        except Exception as e:
+            print(f"HF API Error in Daily Analysis: {str(e)}")
+            return {
+                "message": "Tomorrow is a new day. Stay strong!",
+                "is_high_risk": is_high_risk,
+                "status_color": status_color
+            }
 
 
 summary_service = SummaryService()

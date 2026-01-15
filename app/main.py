@@ -13,7 +13,7 @@ from app.requests.api_schemas import (
     MediaUrlRequest,
     QuitPlanPredictRequest,
     TextToSpeechRequest,
-    SummaryRequest
+    SummaryRequest, DiaryAnalysisRequest
 )
 
 from app.services.content_moderation_service import is_text_toxic, check_image_url, check_video_url
@@ -130,6 +130,23 @@ async def summarize_week(request: SummaryRequest):
     except Exception as e:
         print(f"API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-diary", tags=["Coach Assistance"])
+async def analyze_diary(request: DiaryAnalysisRequest):
+
+    try:
+        data = request.dict()
+
+        result = await run_in_threadpool(summary_service.analyze_diary_sentiment, data)
+
+        return result
+    except Exception as e:
+        print(f"Daily Analysis Error: {e}")
+        return {
+            "message": "Keep going!",
+            "is_high_risk": False,
+            "status_color": "gray"
+        }
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

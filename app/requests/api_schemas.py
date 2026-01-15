@@ -48,3 +48,11 @@ class DiaryLogRequest(BaseModel):
 class SummaryRequest(BaseModel):
     member_name: str
     logs: List[DiaryLogRequest]
+
+class DiaryAnalysisRequest(BaseModel):
+    anxiety_level: Optional[int] = 0
+    craving_level: Optional[int] = 0
+    mood_level: Optional[int] = 5
+    have_smoked: bool = False
+    note: Optional[str] = ""
+    triggers: Optional[List[str]] = []
