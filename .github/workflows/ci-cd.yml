@@ -151,4 +151,4 @@ jobs:
 
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 
-          content: ${{ contains(needs.*.result, 'failure') && '<@naul8292>' || 'Deployment successful! ' }}
+          content: ${{ contains(needs.*.result, 'failure') && '<@756528925760553071>' || 'Deployment successful! ' }}
