@@ -127,12 +127,28 @@ jobs:
   # ==============================================================================
   notify:
     runs-on: ubuntu-latest
-    if: always() # Run even if previous jobs failed/cancelled
-    needs: [test, build-and-push] # Wait for both jobs to finish
+    if: always()
+    needs: [ test, build-and-push ]
     steps:
       - name: Discord Notification
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: sarisia/actions-status-discord@v1
+        if: always()
         with:
-          args: 'Release ${{ github.ref_name }}: ${{ needs.build-and-push.result }} (Test: ${{ needs.test.result }}).'
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+
+          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
+
+          title: "CI/CD Pipeline Status: ${{ github.repository }}"
+
+          description: |
+            **Triggered by:** `${{ github.actor }}`
+            **Branch/Tag:** `${{ github.ref_name }}`
+            **Commit Msg:** `${{ github.event.head_commit.message }}`
+            
+            **Job Details:**
+            **Test:** `${{ needs.test.result }}`
+            **Build & Push:** `${{ needs.build-and-push.result }}`
+
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+          content: ${{ contains(needs.*.result, 'failure') && '<@naul8292>' || 'Deployment successful! ' }}
