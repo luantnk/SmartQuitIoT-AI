@@ -9,9 +9,12 @@ from transformers import (
     SpeechT5Processor,
     SpeechT5ForTextToSpeech,
     SpeechT5HifiGan,
-    AutoModelForCausalLM,
-    AutoTokenizer
 )
+from huggingface_hub import InferenceClient
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 print("Loading AI Models... This may take a while...")
 
@@ -20,31 +23,49 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-text_classifier = pipeline("text-classification", model="unitary/toxic-bert", top_k=None,
-                           device=0 if torch.cuda.is_available() else -1)
-image_processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
-image_model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
-stt_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small",
-                        device=0 if torch.cuda.is_available() else -1)
-tts_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
-tts_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
-tts_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
 
-print("Loading GenAI Summary Model (Qwen)...")
-model_id = "Qwen/Qwen2.5-1.5B-Instruct"
-
+print("Loading Content Moderation & Audio Models...")
 try:
-    summary_tokenizer = AutoTokenizer.from_pretrained(model_id)
-    summary_model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype="auto",
-        device_map="auto"
-    )
-    print("SUCCESS: Qwen Summary Model Loaded!")
+    # Toxic Comment Detection
+    text_classifier = pipeline("text-classification", model="unitary/toxic-bert", top_k=None,
+                               device=0 if torch.cuda.is_available() else -1)
+
+    # NSFW Image Detection
+    image_processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
+    image_model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
+
+    # Speech to Text (Whisper)
+    stt_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small",
+                            device=0 if torch.cuda.is_available() else -1)
+
+    # Text to Speech (Microsoft SpeechT5)
+    tts_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+    tts_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
+    tts_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
+
+    # Load Speaker Embeddings for TTS
+    embedding_path = os.path.join(CURRENT_DIR, "speaker_speecht5.pt")
+    speaker_embeddings = None
+    if os.path.exists(embedding_path):
+        speaker_embeddings = torch.load(embedding_path)
+    else:
+        print("WARNING: speaker_speecht5.pt not found. TTS might fail.")
+
 except Exception as e:
-    print(f"FAILED to load Qwen: {e}")
-    summary_tokenizer = None
-    summary_model = None
+    print(f"ERROR loading local models: {e}")
+
+
+
+print("Initializing Hugging Face Inference Client...")
+hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
+if not hf_token:
+    print("WARNING: HUGGINGFACEHUB_API_TOKEN not found in env. Summary service will fail.")
+    hf_client = None
+else:
+    hf_client = InferenceClient(token=hf_token)
+    print("SUCCESS: Hugging Face Client Connected!")
+
 
 
 print("Loading ONNX Prediction Model...")
@@ -69,10 +90,5 @@ for path in candidate_paths:
 
 if onnx_session is None:
     print("WARNING: Could not find smartquit_model.onnx")
-
-embedding_path = os.path.join(CURRENT_DIR, "speaker_speecht5.pt")
-speaker_embeddings = None
-if os.path.exists(embedding_path):
-    speaker_embeddings = torch.load(embedding_path)
 
 print("All AI Models Ready!")
