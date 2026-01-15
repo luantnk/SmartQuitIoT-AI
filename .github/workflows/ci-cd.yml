@@ -1,0 +1,138 @@
+name: CI/CD Pipeline For Python AI Microservice
+
+# --- TRIGGERS ---
+# Trigger pipeline on push to main branch OR when a semantic version tag (e.g., v1.0.0) is pushed.
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==============================================================================
+  # JOB 1: UNIT TESTING
+  # Goal: Ensure code quality before building Docker images.
+  # ==============================================================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: 'pip' # Enable caching for faster dependency installation
+
+      # System dependencies required for some Python libraries (e.g., OpenCV, certain ML libs)
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      # Run tests. If this fails, the pipeline stops here.
+      - name: Run Tests
+        run: |
+          export PYTHONPATH=$PYTHONPATH:.
+          pytest tests/
+
+  # ==============================================================================
+  # JOB 2: BUILD, SCAN & PUSH
+  # Goal: Build Docker image, scan for vulnerabilities, and push to Registry.
+  # ==============================================================================
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test # CRITICAL: Only run if tests pass (Quality Gate)
+    if: github.event_name == 'push' # Do not run on Pull Requests (save resources)
+    permissions:
+      contents: read
+      packages: write # Required permission to push to GitHub Container Registry
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Automatically generate tags based on Git context (e.g., 'latest', 'sha-xyz', 'v1.0.0')
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=semver,pattern={{version}}       # Generates tag: 1.0.0
+            type=semver,pattern={{major}}.{{minor}} # Generates tag: 1.0
+
+      # STEP A: Build and LOAD to local Docker daemon (do not push yet)
+      # This allows Trivy to scan the image locally before we release it.
+      - name: Build and load for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # STEP B: Security Scan
+      # Fails the pipeline if CRITICAL or HIGH vulnerabilities are found.
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test'
+          format: 'table'
+          exit-code: '1'          # Break pipeline on error
+          ignore-unfixed: true    # Ignore vulnerabilities with no available patch
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # STEP C: Push to Registry
+      # Only runs if Trivy scan passes. Re-uses build cache so it's instant.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ==============================================================================
+  # JOB 3: NOTIFICATION
+  # Goal: Alert the team via Discord about the pipeline status.
+  # ==============================================================================
+  notify:
+    runs-on: ubuntu-latest
+    if: always() # Run even if previous jobs failed/cancelled
+    needs: [test, build-and-push] # Wait for both jobs to finish
+    steps:
+      - name: Discord Notification
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: 'Release ${{ github.ref_name }}: ${{ needs.build-and-push.result }} (Test: ${{ needs.test.result }}).'
