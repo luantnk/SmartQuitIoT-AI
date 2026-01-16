@@ -39,7 +39,9 @@ def test_check_text_safe(mock_is_toxic):
 def test_check_image_safe(mock_check_image):
     mock_check_image.return_value = False
 
-    response = client.post("/check-image-url", data={"image_url": "http://example.com/image.jpg"})
+    response = client.post(
+        "/check-image-url", data={"image_url": "http://example.com/image.jpg"}
+    )
 
     assert response.status_code == 200
     assert response.json()["type"] == "image"

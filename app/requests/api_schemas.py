@@ -1,15 +1,18 @@
-
 from pydantic import BaseModel
 from typing import List, Optional
+
 
 class TextCheckRequest(BaseModel):
     text: str
 
+
 class MediaUrlRequest(BaseModel):
     url: str
 
+
 class QuitPlanPredictRequest(BaseModel):
     features: list[float]
+
 
 class TextToSpeechRequest(BaseModel):
     text: str
@@ -45,9 +48,12 @@ class DiaryLogRequest(BaseModel):
     reduction_percentage: float
     triggers: Optional[List[str]] = None
     note: Optional[str] = None
+
+
 class SummaryRequest(BaseModel):
     member_name: str
     logs: List[DiaryLogRequest]
+
 
 class DiaryAnalysisRequest(BaseModel):
     anxiety_level: Optional[int] = 0
@@ -57,11 +63,13 @@ class DiaryAnalysisRequest(BaseModel):
     note: Optional[str] = ""
     triggers: Optional[List[str]] = []
 
+
 class ReportChartRequest(BaseModel):
     member_name: str
     logs: List[dict]
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
 
 class CoachDataRequest(BaseModel):
     coach_name: str

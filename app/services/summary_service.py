@@ -16,7 +16,7 @@ def clean_java_triggers(raw_trigger):
         if len(raw_trigger) < 50 and "java" not in raw_trigger:
             return raw_trigger
 
-        matches = re.findall(r'\b[A-Z][a-zA-Z]+\b', raw_trigger)
+        matches = re.findall(r"\b[A-Z][a-zA-Z]+\b", raw_trigger)
         cleaned = [w for w in matches if w not in ["ArrayList", "java", "util"]]
 
         if cleaned:
@@ -35,7 +35,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             "summary": "No data available.",
             "risk_level": "UNKNOWN",
             "alerts": [],
-            "status_color": "gray"
+            "status_color": "gray",
         }
 
     if hf_client is None:
@@ -43,7 +43,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             "summary": "AI Model (Hugging Face Client) is not loaded on server.",
             "risk_level": "ERROR",
             "alerts": ["System Error"],
-            "status_color": "red"
+            "status_color": "red",
         }
 
     log_text = ""
@@ -51,16 +51,16 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
         triggers_raw = log.get("triggers")
         triggers = clean_java_triggers(triggers_raw)
 
-        nrt_status = "Yes" if log.get('is_use_nrt') == 1 else "No"
-        money_spent = log.get('money_spent_on_nrt', 0)
+        nrt_status = "Yes" if log.get("is_use_nrt") == 1 else "No"
+        money_spent = log.get("money_spent_on_nrt", 0)
 
-        hr = log.get('heart_rate', 0)
-        spo2 = log.get('spo2', 0)
-        steps = log.get('steps', 0)
-        sleep = log.get('sleep_duration', 0)
+        hr = log.get("heart_rate", 0)
+        spo2 = log.get("spo2", 0)
+        steps = log.get("steps", 0)
+        sleep = log.get("sleep_duration", 0)
 
         health_info = ""
-        if log.get('is_connect_iotdevice') == 1:
+        if log.get("is_connect_iotdevice") == 1:
             health_info = (
                 f" | [Health Data]: HR {hr} bpm, "
                 f"SpO2 {spo2}%, "
@@ -68,10 +68,10 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
                 f"Steps {steps}"
             )
 
-        confidence = log.get('confidence_level', 0)
-        craving = log.get('craving_level', 0)
-        mood = log.get('mood_level', 0)
-        anxiety = log.get('anxiety_level', 0)
+        confidence = log.get("confidence_level", 0)
+        craving = log.get("craving_level", 0)
+        mood = log.get("mood_level", 0)
+        anxiety = log.get("anxiety_level", 0)
 
         log_text += (
             f"- Date {log['date']}: "
@@ -87,15 +87,13 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
     system_prompt = (
         "You are an expert smoking cessation clinical coach (SmartQuitIoT). "
         "Your goal is to analyze the logs and return a valid **JSON Object**.\n\n"
-
         "**STRICT JSON OUTPUT STRUCTURE:**\n"
         "{\n"
-        "  \"summary_data\": \"(String) The Clinical Insight Report in Markdown...\",\n"
-        "  \"risk_level\": \"(String) CRITICAL | HIGH | MEDIUM | LOW\",\n"
+        '  "summary_data": "(String) The Clinical Insight Report in Markdown...",\n'
+        '  "risk_level": "(String) CRITICAL | HIGH | MEDIUM | LOW",\n'
         "  \"alerts\": [\"(Array of strings) Short tags e.g. 'No NRT', 'HR Spike'\"],\n"
-        "  \"status_color\": \"(String) red | yellow | green\"\n"
+        '  "status_color": "(String) red | yellow | green"\n'
         "}\n\n"
-
         "**CONTENT RULES FOR THE 'summary' FIELD:**\n"
         "1. **Analysis Over Listing**: DO NOT simply list dates or raw numbers. Instead, ANALYZE the relationship (e.g., 'Smoking volume spiked by 60% following severe insomnia').\n"
         "2. **Thematic Structure**: Organize the report into three clear narrative sections:\n"
@@ -111,7 +109,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_message}
+        {"role": "user", "content": user_message},
     ]
 
     try:
@@ -121,7 +119,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             max_tokens=1000,
             temperature=0.7,
             top_p=0.9,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content
@@ -132,7 +130,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             "summary": response.choices[0].message.content,
             "risk_level": "UNKNOWN",
             "alerts": ["JSON Parse Error"],
-            "status_color": "gray"
+            "status_color": "gray",
         }
     except Exception as e:
         print(f"HF API Error: {str(e)}")
@@ -140,7 +138,7 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             "summary": f"Error generating report: {str(e)}",
             "risk_level": "ERROR",
             "alerts": ["System Error"],
-            "status_color": "red"
+            "status_color": "red",
         }
 
 
@@ -154,14 +152,14 @@ class SummaryService:
             return {
                 "message": "Keep pushing forward! You are doing great.",
                 "is_high_risk": False,
-                "status_color": "green"
+                "status_color": "green",
             }
 
-        anxiety = data.get('anxiety_level', 0) or 0
-        craving = data.get('craving_level', 0) or 0
-        mood = data.get('mood_level', 5) or 5
-        smoked = data.get('have_smoked', False)
-        note = data.get('note', "") or ""
+        anxiety = data.get("anxiety_level", 0) or 0
+        craving = data.get("craving_level", 0) or 0
+        mood = data.get("mood_level", 5) or 5
+        smoked = data.get("have_smoked", False)
+        note = data.get("note", "") or ""
 
         is_high_risk = False
         status_color = "green"
@@ -170,7 +168,9 @@ class SummaryService:
         if smoked:
             is_high_risk = True
             status_color = "red"
-            risk_context = "User just RELAPSED (smoked). They might feel guilty. Be kind but firm."
+            risk_context = (
+                "User just RELAPSED (smoked). They might feel guilty. Be kind but firm."
+            )
         elif anxiety >= 7 or craving >= 7:
             is_high_risk = True
             status_color = "yellow"
@@ -178,7 +178,9 @@ class SummaryService:
         elif mood <= 3:
             is_high_risk = True
             status_color = "yellow"
-            risk_context = f"User is feeling down (Mood {mood}/10). Needs encouragement."
+            risk_context = (
+                f"User is feeling down (Mood {mood}/10). Needs encouragement."
+            )
         else:
             risk_context = "User stayed smoke-free and feels okay. Celebrate this win."
 
@@ -199,24 +201,21 @@ class SummaryService:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_message},
         ]
 
         try:
             response = hf_client.chat.completions.create(
-                model=HF_MODEL_ID,
-                messages=messages,
-                max_tokens=150,
-                temperature=0.7
+                model=HF_MODEL_ID, messages=messages, max_tokens=150, temperature=0.7
             )
 
             ai_message = response.choices[0].message.content.strip()
-            ai_message = ai_message.replace('"', '').replace("JSON", "")
+            ai_message = ai_message.replace('"', "").replace("JSON", "")
 
             return {
                 "message": ai_message,
                 "is_high_risk": is_high_risk,
-                "status_color": status_color
+                "status_color": status_color,
             }
 
         except Exception as e:
@@ -224,7 +223,7 @@ class SummaryService:
             return {
                 "message": "Tomorrow is a new day. Stay strong!",
                 "is_high_risk": is_high_risk,
-                "status_color": status_color
+                "status_color": status_color,
             }
 
 

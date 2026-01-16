@@ -27,16 +27,27 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print("Loading Content Moderation & Audio Models...")
 try:
     # Toxic Comment Detection
-    text_classifier = pipeline("text-classification", model="unitary/toxic-bert", top_k=None,
-                               device=0 if torch.cuda.is_available() else -1)
+    text_classifier = pipeline(
+        "text-classification",
+        model="unitary/toxic-bert",
+        top_k=None,
+        device=0 if torch.cuda.is_available() else -1,
+    )
 
     # NSFW Image Detection
-    image_processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
-    image_model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
+    image_processor = AutoImageProcessor.from_pretrained(
+        "Falconsai/nsfw_image_detection"
+    )
+    image_model = AutoModelForImageClassification.from_pretrained(
+        "Falconsai/nsfw_image_detection"
+    )
 
     # Speech to Text (Whisper)
-    stt_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small",
-                            device=0 if torch.cuda.is_available() else -1)
+    stt_pipeline = pipeline(
+        "automatic-speech-recognition",
+        model="openai/whisper-small",
+        device=0 if torch.cuda.is_available() else -1,
+    )
 
     # Text to Speech (Microsoft SpeechT5)
     tts_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
@@ -55,24 +66,24 @@ except Exception as e:
     print(f"ERROR loading local models: {e}")
 
 
-
 print("Initializing Hugging Face Inference Client...")
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 if not hf_token:
-    print("WARNING: HUGGINGFACEHUB_API_TOKEN not found in env. Summary service will fail.")
+    print(
+        "WARNING: HUGGINGFACEHUB_API_TOKEN not found in env. Summary service will fail."
+    )
     hf_client = None
 else:
     hf_client = InferenceClient(token=hf_token)
     print("SUCCESS: Hugging Face Client Connected!")
 
 
-
 print("Loading ONNX Prediction Model...")
 candidate_paths = [
     os.path.join(CURRENT_DIR, "smartquit_model.onnx"),
     os.path.join(BASE_DIR, "models", "smartquit_model.onnx"),
-    "smartquit_model.onnx"
+    "smartquit_model.onnx",
 ]
 
 onnx_session = None

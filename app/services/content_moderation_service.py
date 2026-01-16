@@ -17,9 +17,8 @@ def is_text_toxic(text: str) -> bool:
 
     results = text_classifier(text)
 
-
     for item in results[0]:
-        if item['label'] != 'neutral' and item['score'] > TOXIC_THRESHOLD:
+        if item["label"] != "neutral" and item["score"] > TOXIC_THRESHOLD:
             return True
     return False
 
@@ -29,7 +28,6 @@ def is_image_nsfw(pil_image) -> bool:
     inputs = image_processor(images=pil_image, return_tensors="pt")
 
     outputs = image_model(**inputs)
-
 
     predicted_class_idx = outputs.logits.argmax(-1).item()
 
@@ -63,7 +61,9 @@ def check_video_url(url: str) -> bool:
 
         cap = cv2.VideoCapture(temp_path)
         if not cap.isOpened():
-            raise ValueError("Could not open video file. Corrupted or unsupported format.")
+            raise ValueError(
+                "Could not open video file. Corrupted or unsupported format."
+            )
 
         frame_count = 0
 
@@ -72,7 +72,9 @@ def check_video_url(url: str) -> bool:
             if not ret:
 
                 if frame_count == 0:
-                    raise ValueError("Video stream is empty or unreadable (moov atom not found).")
+                    raise ValueError(
+                        "Video stream is empty or unreadable (moov atom not found)."
+                    )
                 break
 
             if frame_count % VIDEO_FRAME_SKIP == 0:
@@ -86,6 +88,7 @@ def check_video_url(url: str) -> bool:
         return False
 
     finally:
-        if cap: cap.release()
+        if cap:
+            cap.release()
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)

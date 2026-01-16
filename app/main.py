@@ -14,10 +14,14 @@ from app.requests.api_schemas import (
     TextToSpeechRequest,
     SummaryRequest,
     DiaryAnalysisRequest,
-    ReportChartRequest
+    ReportChartRequest,
 )
 
-from app.services.content_moderation_service import is_text_toxic, check_image_url, check_video_url
+from app.services.content_moderation_service import (
+    is_text_toxic,
+    check_image_url,
+    check_video_url,
+)
 from app.services.audio_service import transcribe_audio_file, text_to_speech_file
 
 from app.services.summary_service import summary_service, generate_coach_summary
@@ -39,14 +43,16 @@ async def health_check():
     return {
         "status": "AI Service is ready",
         "onnx_model_loaded": onnx_session is not None,
-        "onnx_path": model_path if model_path else "Not Found"
+        "onnx_path": model_path if model_path else "Not Found",
     }
 
 
 @app.post("/predict-quit-status", tags=["Plan Prediction"])
 async def predict_quit_status(req: QuitPlanPredictRequest):
     if onnx_session is None:
-        raise HTTPException(status_code=503, detail="Prediction model not found on server")
+        raise HTTPException(
+            status_code=503, detail="Prediction model not found on server"
+        )
     try:
         # Logic chạy ONNX
         input_data = np.array([req.features], dtype=np.float32)
@@ -59,7 +65,9 @@ async def predict_quit_status(req: QuitPlanPredictRequest):
         return {
             "success_probability": round(success_prob * 100, 2),
             "relapse_risk": round(relapse_risk * 100, 2),
-            "recommendation": "Maintain progress" if success_prob > 0.6 else "Urgent support needed"
+            "recommendation": (
+                "Maintain progress" if success_prob > 0.6 else "Urgent support needed"
+            ),
         }
     except Exception as e:
         print(f"Prediction Error: {e}")
@@ -112,7 +120,9 @@ async def api_voice_to_text(file: UploadFile = File(...)):
 
 
 @app.post("/text-to-voice", tags=["Audio Processing"])
-async def api_text_to_voice(req: TextToSpeechRequest, background_tasks: BackgroundTasks):
+async def api_text_to_voice(
+    req: TextToSpeechRequest, background_tasks: BackgroundTasks
+):
     temp_filename = f"tts_output_{uuid.uuid4()}.wav"
     output_path = os.path.join(CURRENT_WORKING_DIR, temp_filename)
     try:
@@ -128,11 +138,14 @@ async def api_text_to_voice(req: TextToSpeechRequest, background_tasks: Backgrou
 async def summarize_week(request: SummaryRequest):
     try:
         logs_dict = [log.dict() for log in request.logs]
-        summary_text = await run_in_threadpool(generate_coach_summary, request.member_name, logs_dict)
+        summary_text = await run_in_threadpool(
+            generate_coach_summary, request.member_name, logs_dict
+        )
         return {"status": "success", "summary": summary_text}
     except Exception as e:
         print(f"API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/analyze-diary", tags=["Coach Assistance"])
 async def analyze_diary(request: DiaryAnalysisRequest):
@@ -142,11 +155,8 @@ async def analyze_diary(request: DiaryAnalysisRequest):
         return result
     except Exception as e:
         print(f"Daily Analysis Error: {e}")
-        return {
-            "message": "Keep going!",
-            "is_high_risk": False,
-            "status_color": "gray"
-        }
+        return {"message": "Keep going!", "is_high_risk": False, "status_color": "gray"}
+
 
 @app.post("/generate-report-image", tags=["Visualization"])
 async def generate_report_image(req: ReportChartRequest):
@@ -156,16 +166,20 @@ async def generate_report_image(req: ReportChartRequest):
             req.logs,
             req.member_name,
             req.start_date,
-            req.end_date
+            req.end_date,
         )
 
         if not image_base64:
-            raise HTTPException(status_code=400, detail="Could not generate image from provided data")
+            raise HTTPException(
+                status_code=400, detail="Could not generate image from provided data"
+            )
 
         return {"status": "success", "image_base64": image_base64}
 
     except Exception as e:
         print(f"Report Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

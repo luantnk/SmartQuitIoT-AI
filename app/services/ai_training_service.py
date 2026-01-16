@@ -14,22 +14,24 @@ from dotenv import load_dotenv
 CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_FILE_DIR))
 
-load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 MODEL_DIR = os.path.join(PROJECT_ROOT, "app", "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "smartquit_model.onnx")
 
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT', '3306')
-DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", "3306")
+DB_NAME = os.getenv("DB_NAME")
 
 if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
     print(f"[ERROR] Missing env vars. Checked .env at: {PROJECT_ROOT}")
     sys.exit(1)
 
-db_connection_str = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
+db_connection_str = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 try:
     db_connection = create_engine(db_connection_str)
 except Exception as e:
@@ -81,35 +83,49 @@ def preprocess_features(df):
             return int.from_bytes(val, "big")
         return val
 
-    if 'have_smoked' in df.columns:
-        df['have_smoked'] = df['have_smoked'].apply(parse_binary_col).fillna(0).astype(int)
+    if "have_smoked" in df.columns:
+        df["have_smoked"] = (
+            df["have_smoked"].apply(parse_binary_col).fillna(0).astype(int)
+        )
 
     current_year = datetime.now().year
-    df['dob'] = pd.to_datetime(df['dob'], errors='coerce')
-    df['age'] = current_year - df['dob'].dt.year
-    df['age'] = df['age'].fillna(25)
+    df["dob"] = pd.to_datetime(df["dob"], errors="coerce")
+    df["age"] = current_year - df["dob"].dt.year
+    df["age"] = df["age"].fillna(25)
 
-    df['gender_code'] = df['gender'].apply(lambda x: 1 if str(x).upper() == 'MALE' else 0)
+    df["gender_code"] = df["gender"].apply(
+        lambda x: 1 if str(x).upper() == "MALE" else 0
+    )
 
     # Fill NULL
-    df['anxiety_level'] = df['anxiety_level'].fillna(0)
-    df['craving_level'] = df['craving_level'].fillna(0)
-    df['mood_level'] = df['mood_level'].fillna(5)
-    df['heart_rate'] = df['heart_rate'].fillna(0)
-    df['sleep_duration'] = df['sleep_duration'].fillna(0)
-    df['progress'] = df['progress'].fillna(0)
+    df["anxiety_level"] = df["anxiety_level"].fillna(0)
+    df["craving_level"] = df["craving_level"].fillna(0)
+    df["mood_level"] = df["mood_level"].fillna(5)
+    df["heart_rate"] = df["heart_rate"].fillna(0)
+    df["sleep_duration"] = df["sleep_duration"].fillna(0)
+    df["progress"] = df["progress"].fillna(0)
 
     def define_success(row):
-        if row['have_smoked'] > 0: return 0
-        if str(row['phase_status']) == 'COMPLETED': return 1
+        if row["have_smoked"] > 0:
+            return 0
+        if str(row["phase_status"]) == "COMPLETED":
+            return 1
         return 1
 
-    df['target_label'] = df.apply(define_success, axis=1)
+    df["target_label"] = df.apply(define_success, axis=1)
 
     feature_columns = [
-        'ftnd_score', 'smoke_avg_per_day', 'minutes_after_waking_to_smoke',
-        'age', 'gender_code', 'anxiety_level', 'craving_level',
-        'mood_level', 'heart_rate', 'sleep_duration', 'progress'
+        "ftnd_score",
+        "smoke_avg_per_day",
+        "minutes_after_waking_to_smoke",
+        "age",
+        "gender_code",
+        "anxiety_level",
+        "craving_level",
+        "mood_level",
+        "heart_rate",
+        "sleep_duration",
+        "progress",
     ]
 
     df[feature_columns] = df[feature_columns].astype(float)
@@ -119,18 +135,23 @@ def preprocess_features(df):
 def train_and_export_onnx(df, features):
     print("Training SmartQuit Predictive Model...")
     X = df[features]
-    y = df['target_label']
+    y = df["target_label"]
 
     print(f"Phân phối nhãn dữ liệu: {np.unique(y, return_counts=True)}")
     if len(np.unique(y)) < 2:
         print("[ERROR] CRITICAL: Dữ liệu chỉ có 1 loại nhãn.")
         return None
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     model = xgb.XGBClassifier(
-        n_estimators=100, max_depth=4, learning_rate=0.05,
-        eval_metric='logloss', use_label_encoder=False
+        n_estimators=100,
+        max_depth=4,
+        learning_rate=0.05,
+        eval_metric="logloss",
+        use_label_encoder=False,
     )
 
     try:
@@ -139,7 +160,7 @@ def train_and_export_onnx(df, features):
         print(f"Training Done. Accuracy: {accuracy:.4f}")
 
         print("Converting to ONNX...")
-        initial_type = [('float_input', FloatTensorType([None, len(features)]))]
+        initial_type = [("float_input", FloatTensorType([None, len(features)]))]
         onnx_model = onnxmltools.convert_xgboost(model, initial_types=initial_type)
 
         if not os.path.exists(MODEL_DIR):

@@ -14,13 +14,12 @@ try:
     embeddings_dataset = load_dataset(
         "Matthijs/cmu-arctic-xvectors",
         split="validation",
-        revision="refs/convert/parquet"
+        revision="refs/convert/parquet",
     )
 
     print("Dataset loaded successfully from Parquet revision.")
 
     speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
-
 
     os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 

@@ -31,3 +31,4 @@ accelerate
 matplotlib
 seaborn
 flake8
+Black
