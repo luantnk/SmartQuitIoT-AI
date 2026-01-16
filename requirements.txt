@@ -30,3 +30,4 @@ torch
 accelerate
 matplotlib
 seaborn
+flake8
