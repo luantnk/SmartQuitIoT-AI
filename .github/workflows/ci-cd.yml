@@ -157,5 +157,5 @@ jobs:
 
           color: "${{ contains(needs.*.result, 'failure') && '0xFF0000' || '0x2EB67D' }}"
 
-          avatar_url: "[https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png](https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png)"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
           username: "DevOps Bot"
