@@ -135,26 +135,27 @@ jobs:
 
           status: "${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}"
 
-          title: "${{ contains(needs.*.result, 'failure') && ' CI/CD FAILED' || 'CI/CD SUCCESS' }} - ${{ github.repository }}"
+          title: "CI/CD Pipeline Report - ${{ github.repository }}"
 
-
-          content: "${{ contains(needs.*.result, 'failure') && format(' Critical Error: <@{0}> please check logs!', secrets.DISCORD_ALERT_ID) || 'Deployment completed successfully without errors.' }}"
+          content: "${{ contains(needs.*.result, 'failure') && format('Critical Alert: <@{0}> check logs immediately.', secrets.DISCORD_ALERT_ID) || 'Deployment completed successfully.' }}"
 
           description: |
-            ### Build Information
-            > **User:** `${{ github.actor }}`
-            > **Branch:** `${{ github.ref_name }}`
-            > **Commit:** `${{ github.event.head_commit.message }}`
+            **Build Metadata**
+            User: `${{ github.actor }}`
+            Branch: `${{ github.ref_name }}`
+            Message: `${{ github.event.head_commit.message }}`
             
-            ### Pipeline Status
-            | Job | Status |
-            | :--- | :--- |
-            | Unit Test | ${{ needs.test.result == 'success' && ' Pass' || ' Fail' }} |
-            | Docker Build | ${{ needs.build-and-push.result == 'success' && ' Pass' || 'Fail' }} |
+            **Execution Status**
+            ```text
+            JOB NAME          STATUS
+            --------------------------
+            Unit Testing      ${{ needs.test.result == 'success' && 'PASS' || 'FAIL' }}
+            Docker Build      ${{ needs.build-and-push.result == 'success' && 'PASS' || 'FAIL' }}
+            ```
             
-             [**Click here to view full logs**](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            [View Full System Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
           color: "${{ contains(needs.*.result, 'failure') && '0xFF0000' || '0x2EB67D' }}"
 
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-          username: "GitHub Actions Bot"
+          avatar_url: "[https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png](https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png)"
+          username: "DevOps Bot"
