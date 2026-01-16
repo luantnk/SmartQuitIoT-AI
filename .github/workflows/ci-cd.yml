@@ -47,6 +47,11 @@ jobs:
 #          python -m pip install --upgrade pip
 #          pip install -r requirements.txt
 #          pip install pytest httpx
+      - name: Check formatting with Black
+        run: |
+          # --check makes the build fail if files are unformatted
+          # Remove --check if you just want it to run silently (not recommended for CI)
+          black --check .
 
       # Run tests. If this fails, the pipeline stops here.
       - name: Run Tests

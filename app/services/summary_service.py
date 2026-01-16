@@ -26,10 +26,7 @@ def clean_java_triggers(raw_trigger):
 
 
 def generate_coach_summary(member_name: str, logs: list) -> dict:
-    """
-    Hàm này dùng để tạo báo cáo tuần (Weekly Report).
-    Giữ nguyên logic cũ của bạn.
-    """
+
     if not logs:
         return {
             "summary": "No data available.",
@@ -140,6 +137,58 @@ def generate_coach_summary(member_name: str, logs: list) -> dict:
             "alerts": ["System Error"],
             "status_color": "red",
         }
+
+
+def generate_peak_intervention(
+    peak_time: str, craving_level: float, mood: float, anxiety: float
+) -> str:
+
+    if hf_client is None:
+        return f"High risk detected at {peak_time}. Please stay strong and drink water!"
+
+    try:
+        hour = int(peak_time.split(":")[0])
+    except:
+        hour = 12
+
+    time_context = "morning"
+    if 12 <= hour < 17:
+        time_context = "afternoon"
+    elif 17 <= hour < 22:
+        time_context = "evening"
+    elif hour >= 22 or hour < 5:
+        time_context = "late night (user should be sleeping)"
+
+    system_prompt = (
+        "You are a smart health assistant. "
+        "The user is predicted to have a PEAK CIGARETTE CRAVING at a specific time. "
+        "Your goal: Suggest ONE specific, actionable, distraction activity suitable for that time of day. "
+        "Keep it under 40 words. Be encouraging."
+    )
+
+    user_message = (
+        f"Prediction: Peak craving at {peak_time} ({time_context}).\n"
+        f"Intensity: {craving_level:.1f}/10.\n"
+        f"User Mood: {mood}/10. Anxiety: {anxiety}/10.\n"
+        "Suggest an intervention."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+
+    try:
+        response = hf_client.chat.completions.create(
+            model=HF_MODEL_ID,
+            messages=messages,
+            max_tokens=60,
+            temperature=0.8,
+        )
+        return response.choices[0].message.content.strip().replace('"', "")
+    except Exception as e:
+        print(f"Intervention Generation Error: {e}")
+        return f"Craving peak at {peak_time}. Try 4-7-8 breathing exercises."
 
 
 class SummaryService:

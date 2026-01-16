@@ -145,7 +145,6 @@ def train_peak_craving_time_model(df):
     df["day_of_week"] = df["record_time"].dt.dayofweek
     df["time_float"] = df["record_time"].dt.hour + (df["record_time"].dt.minute / 60.0)
 
-
     feature_cols = [
         "time_float",
         "day_of_week",
