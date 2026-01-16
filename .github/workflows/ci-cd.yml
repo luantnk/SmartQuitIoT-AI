@@ -133,11 +133,12 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
 
-          status: '${{ contains(needs.*.result, "failure") && "failure" || contains(needs.*.result, "cancelled") && "cancelled" || "success" }}'
+          status: "${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}"
 
-          title: "${{ contains(needs.*.result, 'failure') && 'CI/CD FAILED' || 'CI/CD SUCCESS' }} - ${{ github.repository }}"
+          title: "${{ contains(needs.*.result, 'failure') && ' CI/CD FAILED' || 'CI/CD SUCCESS' }} - ${{ github.repository }}"
 
-          content: "${{ contains(needs.*.result, 'failure') && format('Critical Error: <@{0}> please check logs!', secrets.DISCORD_ALERT_ID) || 'Deployment completed successfully without errors.' }}"
+
+          content: "${{ contains(needs.*.result, 'failure') && format(' Critical Error: <@{0}> please check logs!', secrets.DISCORD_ALERT_ID) || 'Deployment completed successfully without errors.' }}"
 
           description: |
             ### Build Information
@@ -148,10 +149,10 @@ jobs:
             ### Pipeline Status
             | Job | Status |
             | :--- | :--- |
-            | Unit Test | ${{ needs.test.result == 'success' && 'Pass' || 'Fail' }} |
-            | Docker Build | ${{ needs.build-and-push.result == 'success' && 'Pass' || 'Fail' }} |
+            | Unit Test | ${{ needs.test.result == 'success' && ' Pass' || ' Fail' }} |
+            | Docker Build | ${{ needs.build-and-push.result == 'success' && ' Pass' || 'Fail' }} |
             
-            [**Click here to view full logs**](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+             [**Click here to view full logs**](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
           color: "${{ contains(needs.*.result, 'failure') && '0xFF0000' || '0x2EB67D' }}"
 
