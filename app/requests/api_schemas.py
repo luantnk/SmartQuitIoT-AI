@@ -77,3 +77,16 @@ class CoachDataRequest(BaseModel):
     appointments_completed: int
     member_highlights: List[str]
     top_triggers: List[str]
+
+
+class PeakCravingRequest(BaseModel):
+    age: int
+    gender_code: int  # 1 for Male, 0 for Female
+    ftnd_score: float
+    smoke_avg_per_day: float
+    mood_level: float
+    anxiety_level: float
+
+    # Predict for a specific day (0=Monday, 6=Sunday)
+    # If not provided, backend uses today
+    day_of_week: Optional[int] = None

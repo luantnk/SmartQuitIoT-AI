@@ -29,7 +29,9 @@ if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
     print(f"[ERROR] Missing env vars in .env")
     sys.exit(1)
 
-db_connection_str = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+db_connection_str = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 try:
     db_connection = create_engine(db_connection_str)
 except Exception as e:
@@ -102,7 +104,9 @@ def preprocess_common_features(df):
         return val
 
     if "have_smoked" in df.columns:
-        df["have_smoked"] = df["have_smoked"].apply(parse_binary_col).fillna(0).astype(int)
+        df["have_smoked"] = (
+            df["have_smoked"].apply(parse_binary_col).fillna(0).astype(int)
+        )
 
     # Calculate Age
     current_year = datetime.now().year
@@ -111,10 +115,19 @@ def preprocess_common_features(df):
     df["age"] = df["age"].fillna(30)
 
     # Gender Encoding
-    df["gender_code"] = df["gender"].apply(lambda x: 1 if str(x).upper() == "MALE" else 0)
+    df["gender_code"] = df["gender"].apply(
+        lambda x: 1 if str(x).upper() == "MALE" else 0
+    )
 
     # Handle Nulls in Metrics
-    cols_to_zero = ["anxiety_level", "craving_level", "heart_rate", "sleep_duration", "progress", "ftnd_score"]
+    cols_to_zero = [
+        "anxiety_level",
+        "craving_level",
+        "heart_rate",
+        "sleep_duration",
+        "progress",
+        "ftnd_score",
+    ]
     for col in cols_to_zero:
         df[col] = df[col].fillna(0).astype(float)
 
@@ -130,31 +143,31 @@ def train_peak_craving_time_model(df):
     df["record_time"] = pd.to_datetime(df["record_time"])
     df["hour_of_day"] = df["record_time"].dt.hour
     df["day_of_week"] = df["record_time"].dt.dayofweek
+    df["time_float"] = df["record_time"].dt.hour + (df["record_time"].dt.minute / 60.0)
 
 
     feature_cols = [
-        "hour_of_day",
+        "time_float",
         "day_of_week",
         "ftnd_score",
         "smoke_avg_per_day",
         "age",
         "gender_code",
         "mood_level",
-        "anxiety_level"
+        "anxiety_level",
     ]
 
-    training_data = df.dropna(subset=feature_cols + ['craving_level'])
+    training_data = df.dropna(subset=feature_cols + ["craving_level"])
 
     X = training_data[feature_cols]
-    y = training_data['craving_level']
+    y = training_data["craving_level"]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     model = xgb.XGBRegressor(
-        n_estimators=150,
-        max_depth=5,
-        learning_rate=0.05,
-        objective='reg:squarederror'
+        n_estimators=150, max_depth=5, learning_rate=0.05, objective="reg:squarederror"
     )
 
     model.fit(X_train, y_train)
@@ -177,8 +190,10 @@ def train_success_model(df):
     print("\n--- Training Success/Failure Model ---")
 
     def define_success(row):
-        if row["have_smoked"] > 0: return 0  # Failed
-        if str(row["phase_status"]) == "COMPLETED": return 1  # Success
+        if row["have_smoked"] > 0:
+            return 0  # Failed
+        if str(row["phase_status"]) == "COMPLETED":
+            return 1  # Success
         return 1
 
     df["target_label"] = df.apply(define_success, axis=1)
@@ -193,7 +208,7 @@ def train_success_model(df):
         "craving_level",
         "mood_level",
         "heart_rate",
-        "progress"
+        "progress",
     ]
 
     X = df[feature_cols]
@@ -203,11 +218,16 @@ def train_success_model(df):
         print("[SKIP] Not enough variety in target labels to train classifier.")
         return
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     model = xgb.XGBClassifier(
-        n_estimators=100, max_depth=4, learning_rate=0.05,
-        eval_metric="logloss", use_label_encoder=False
+        n_estimators=100,
+        max_depth=4,
+        learning_rate=0.05,
+        eval_metric="logloss",
+        use_label_encoder=False,
     )
 
     model.fit(X_train, y_train)
