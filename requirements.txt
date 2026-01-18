@@ -21,15 +21,10 @@ scipy
 sentencepiece
 soundfile
 datasets
-fastapi
-uvicorn
 langchain
 langchain-huggingface
-transformers
-torch>=2.6.0
 accelerate
 matplotlib
 seaborn
 flake8
-Black
-jaraco.context>=6.1.0
+black
