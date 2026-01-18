@@ -119,6 +119,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+          trivyignores: .trivyignore
 
      # Push docker image
       - name: Build and push Docker image
