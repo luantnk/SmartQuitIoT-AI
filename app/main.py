@@ -47,15 +47,9 @@ CURRENT_WORKING_DIR = os.getcwd()
 
 
 def _calculate_daily_risk(req: PeakCravingRequest) -> Dict:
-    """
-    Internal helper to run the ONNX model for 96 time intervals (15 mins).
-    Returns raw data used by both Mobile and Dashboard endpoints.
-    """
     sess = ai_models.onnx_session_craving
     if sess is None:
         raise HTTPException(status_code=503, detail="Craving Model not loaded")
-
-    # Normalize Day
     current_day = (
         req.day_of_week if req.day_of_week is not None else datetime.now().weekday()
     )
@@ -65,7 +59,6 @@ def _calculate_daily_risk(req: PeakCravingRequest) -> Dict:
     batch_input = []
     time_labels = []
 
-    # Generate 96 points (00:00, 00:15, ... 23:45)
     for step in range(0, 96):
         hour_float = step / 4.0
         hour_part = int(hour_float)
@@ -85,14 +78,12 @@ def _calculate_daily_risk(req: PeakCravingRequest) -> Dict:
             ]
         )
 
-    # Inference
     input_name = sess.get_inputs()[0].name
     predictions = sess.run(None, {input_name: np.array(batch_input, dtype=np.float32)})[
         0
     ]
     preds_flat = predictions.flatten().tolist()
 
-    # Find Peak
     max_val = max(preds_flat)
     peak_index = preds_flat.index(max_val)
 
@@ -139,21 +130,10 @@ async def trigger_training(background_tasks: BackgroundTasks):
     return {"status": "Training started."}
 
 
-# =========================================================================
-#  ENDPOINT 1: MOBILE APP (FCM Notification Optimized)
-# =========================================================================
-
-
 @app.post("/predict-risk/mobile", tags=["Prediction"], summary="For Mobile/FCM")
 async def predict_risk_mobile(req: PeakCravingRequest):
-    """
-    Lightweight endpoint. Returns only the Peak Time and a Motivation Message.
-    Ideal for triggering Firebase Cloud Messaging.
-    """
-    # 1. Calculate Risk
+
     data = _calculate_daily_risk(req)
-
-
     intervention_msg = await run_in_threadpool(
         generate_peak_intervention,
         data["peak_time"],
@@ -161,7 +141,6 @@ async def predict_risk_mobile(req: PeakCravingRequest):
         req.mood_level,
         req.anxiety_level,
     )
-
     return {
         "peak_time": data["peak_time"],
         "peak_craving_level": round(data["peak_val"], 2),
@@ -171,41 +150,22 @@ async def predict_risk_mobile(req: PeakCravingRequest):
 
 
 
-# Dashboard api endpoint for admin
+
 @app.post("/predict-risk/dashboard", tags=["Prediction"], summary="For Admin Dashboard")
 async def predict_risk_dashboard(req: PeakCravingRequest):
-    """
-    Rich data endpoint. Returns chart data, time segments, and detailed analytics.
-    Ideal for React Charts (Recharts/Chart.js).
-    """
     data = _calculate_daily_risk(req)
     preds = data["predictions"]
-
-
-    # Analysis (Morning, Afternoon, Evening, Night)
-    # 0-23 points = Night (00:00 - 05:45)
-    # 24-47 points = Morning (06:00 - 11:45)
-    # 48-71 points = Afternoon (12:00 - 17:45)
-    # 72-95 points = Evening (18:00 - 23:45)
     segments = {
         "night_avg": np.mean(preds[0:24]),
         "morning_avg": np.mean(preds[24:48]),
         "afternoon_avg": np.mean(preds[48:72]),
         "evening_avg": np.mean(preds[72:96]),
     }
-
-    # Find the worst segment to highlight in UI
     worst_segment = max(segments, key=segments.get)
-
-    # Duration of High Risk
-    # How many 15-min blocks are above level 7.0?
     high_risk_threshold = 7.0
     high_risk_count = sum(1 for x in preds if x >= high_risk_threshold)
     high_risk_duration_minutes = high_risk_count * 15
-
-    # Overall Daily Load
     avg_daily_risk = np.mean(preds)
-
     return {
         "overview": {
             "peak_time": data["peak_time"],
@@ -216,13 +176,13 @@ async def predict_risk_dashboard(req: PeakCravingRequest):
         "analytics": {
             "worst_time_of_day": worst_segment.replace(
                 "_avg", ""
-            ).title(),  # e.g. "Evening"
+            ).title(),
             "high_risk_duration_minutes": high_risk_duration_minutes,
             "segments": {k: round(v, 2) for k, v in segments.items()},
         },
         "chart_data": {
-            "labels": data["time_labels"],  # X-Axis: ["00:00", "00:15"...]
-            "values": [round(x, 2) for x in preds],  # Y-Axis: [2.1, 2.4...]
+            "labels": data["time_labels"],
+            "values": [round(x, 2) for x in preds],
         },
     }
 
@@ -234,7 +194,6 @@ async def predict_quit_status(req: QuitPlanPredictRequest):
     sess = ai_models.onnx_session_success
     if sess is None:
         raise HTTPException(status_code=503, detail="Success Model not loaded")
-
     try:
         input_data = np.array([req.features], dtype=np.float32)
         input_name = sess.get_inputs()[0].name

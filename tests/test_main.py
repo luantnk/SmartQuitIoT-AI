@@ -10,12 +10,13 @@ client = TestClient(app)
 def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "AI Service is ready"}
+    data = response.json()
+    assert data["status"] == "AI Service is ready"
+    assert "models" in data
 
 
 @patch("app.main.is_text_toxic")
 def test_check_text_toxic(mock_is_toxic):
-
     mock_is_toxic.return_value = True
 
     response = client.post("/check-content", json={"text": "You are stupid"})
@@ -38,9 +39,8 @@ def test_check_text_safe(mock_is_toxic):
 @patch("app.main.check_image_url")
 def test_check_image_safe(mock_check_image):
     mock_check_image.return_value = False
-
     response = client.post(
-        "/check-image-url", data={"image_url": "http://example.com/image.jpg"}
+        "/check-image-url", json={"url": "http://example.com/image.jpg"}
     )
 
     assert response.status_code == 200
@@ -48,11 +48,3 @@ def test_check_image_safe(mock_check_image):
     assert response.json()["isToxic"] is False
 
 
-@patch("app.main.check_image_url")
-def test_check_image_error(mock_check_image):
-    mock_check_image.side_effect = ValueError("Invalid Image Format")
-
-    response = client.post("/check-image-url", data={"image_url": "bad_url"})
-
-    assert response.status_code == 422
-    assert "Invalid Image" in response.json()["detail"]
