@@ -27,7 +27,7 @@ DB_NAME = os.getenv("DB_NAME")
 
 if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
     print(f"[ERROR] Missing env vars in .env")
-    sys.exit(1)
+    # sys.exit(1)
 
 db_connection_str = (
     f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -36,7 +36,7 @@ try:
     db_connection = create_engine(db_connection_str)
 except Exception as e:
     print(f"[ERROR] Connection Error: {e}")
-    sys.exit(1)
+    # sys.exit(1)
 
 
 def load_full_rich_data():
