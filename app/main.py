@@ -27,7 +27,11 @@ from app.services.content_moderation_service import (
     check_video_url,
 )
 from app.services.audio_service import transcribe_audio_file, text_to_speech_file
-from app.services.summary_service import summary_service, generate_coach_summary, generate_peak_intervention
+from app.services.summary_service import (
+    summary_service,
+    generate_coach_summary,
+    generate_peak_intervention,
+)
 from app.services.report_service import report_service
 from app.services.ai_training_service import (
     load_full_rich_data,
@@ -100,6 +104,7 @@ def cleanup_file(path: str):
     if os.path.exists(path):
         os.remove(path)
 
+
 @app.get("/health", tags=["System"])
 async def health_check():
     return {
@@ -148,9 +153,6 @@ async def predict_risk_mobile(req: PeakCravingRequest):
     }
 
 
-
-
-
 @app.post("/predict-risk/dashboard", tags=["Prediction"], summary="For Admin Dashboard")
 async def predict_risk_dashboard(req: PeakCravingRequest):
     data = _calculate_daily_risk(req)
@@ -174,9 +176,7 @@ async def predict_risk_dashboard(req: PeakCravingRequest):
             "risk_status": "CRITICAL" if data["peak_val"] > 8 else "MODERATE",
         },
         "analytics": {
-            "worst_time_of_day": worst_segment.replace(
-                "_avg", ""
-            ).title(),
+            "worst_time_of_day": worst_segment.replace("_avg", "").title(),
             "high_risk_duration_minutes": high_risk_duration_minutes,
             "segments": {k: round(v, 2) for k, v in segments.items()},
         },
@@ -185,8 +185,6 @@ async def predict_risk_dashboard(req: PeakCravingRequest):
             "values": [round(x, 2) for x in preds],
         },
     }
-
-
 
 
 @app.post("/predict-quit-status", tags=["Prediction"])

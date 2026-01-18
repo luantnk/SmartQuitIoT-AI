@@ -46,5 +46,3 @@ def test_check_image_safe(mock_check_image):
     assert response.status_code == 200
     assert response.json()["type"] == "image"
     assert response.json()["isToxic"] is False
-
-
