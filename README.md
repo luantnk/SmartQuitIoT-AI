@@ -1,0 +1,1 @@
+[![CI/CD Pipeline For Python AI Microservice](https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/ci-cd.yml)
