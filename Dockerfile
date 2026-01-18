@@ -11,6 +11,10 @@ WORKDIR /code
 
 COPY requirements.txt .
 
+
+RUN pip install --upgrade pip
+
+
 RUN pip install --no-cache-dir "torch>=2.6.0" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 
