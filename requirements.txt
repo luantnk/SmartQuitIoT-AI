@@ -26,9 +26,10 @@ uvicorn
 langchain
 langchain-huggingface
 transformers
-torch
+torch>=2.6.0
 accelerate
 matplotlib
 seaborn
 flake8
 Black
+jaraco.context>=6.1.0
