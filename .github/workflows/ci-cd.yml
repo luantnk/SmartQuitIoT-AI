@@ -101,7 +101,7 @@ jobs:
 
       # Load docker image
       - name: Build and load for scanning
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           load: true
@@ -123,7 +123,7 @@ jobs:
 
      # Push docker image
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
