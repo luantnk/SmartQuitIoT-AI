@@ -1,8 +1,26 @@
 <a id="readme-top"></a>
 <div align="center">
 
-[![CI/CD Pipeline](https://img.shields.io/github/actions/workflow/status/luantnk/SmartQuitIoT-AI/ci-cd.yml?style=for-the-badge&logo=github-actions&logoColor=white&label=CI%2FCD%20Pipeline)](https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/ci-cd.yml)
-<!-- PROJECT SHIELDS -->
+
+<div align="center">
+
+  <a href="https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/ci-cd.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/luantnk/SmartQuitIoT-AI/ci-cd.yml?style=for-the-badge&logo=github-actions&logoColor=white&label=CI%2FCD%20Pipeline" alt="CI/CD Pipeline" />
+  </a>
+
+  <a href="https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/format-code.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/luantnk/SmartQuitIoT-AI/format-code.yml?style=for-the-badge&label=Format%20Python&logo=python&logoColor=white&color=3776AB" alt="Format Python" />
+  </a>
+  
+  <a href="https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/github-code-scanning/codeql">
+    <img src="https://img.shields.io/github/actions/workflow/status/luantnk/SmartQuitIoT-AI/codeql.yml?style=for-the-badge&label=Security%20Scan&logo=github&logoColor=white&color=success" alt="Security Scan" />
+  </a>
+
+  <a href="https://github.com/luantnk/SmartQuitIoT-AI/actions/workflows/dependabot/dependabot-updates">
+    <img src="https://img.shields.io/badge/Dependabot-Active-025E8C?style=for-the-badge&logo=dependabot&logoColor=white" alt="Dependabot" />
+  </a>
+
+</div><!-- PROJECT SHIELDS -->
 
 [![Python][Python-shield]][Python-url]
 [![FastAPI][FastAPI-shield]][FastAPI-url]
